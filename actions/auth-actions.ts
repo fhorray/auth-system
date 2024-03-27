@@ -1,26 +1,21 @@
-import db from "@/db/drizzle";
-import { users } from "@/db/schema";
+import db from '@/db/drizzle';
+import { users } from '@/db/schema';
+import AuthService from '@/services/auth-service';
 
-import * as bcrypt from "bcrypt";
-import { eq } from "drizzle-orm";
-import { redirect } from "next/navigation";
+import * as bcrypt from 'bcrypt';
+import { eq } from 'drizzle-orm';
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 
 async function createAccount(formData: FormData) {
-  "use server";
+  'use server';
 
-  const fullName = formData.get("full-name") as string;
-  const username = formData.get("username") as string;
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
+  const fullName = formData.get('full-name') as string;
+  const username = formData.get('username') as string;
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
 
   const hashPassword = await bcrypt.hash(password, 10);
-
-  console.log({
-    fullName,
-    username,
-    password,
-    email,
-  });
 
   await db.insert(users).values({
     fullName: fullName,
@@ -29,35 +24,39 @@ async function createAccount(formData: FormData) {
     email: email,
   });
 
-  redirect("/login");
+  redirect('/login');
 }
 
 async function login(formData: FormData) {
-  "use server";
+  'use server';
 
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
 
   const user = await db.query.users.findFirst({
     where: eq(users.email, email),
   });
 
-  console.log(email, password);
-
   if (!user) {
-    console.log("Erro no login");
-    redirect("/login");
+    console.log('Erro no login');
+    redirect('/login');
   }
-  const isMatch = await bcrypt.compare(password, user.password || "");
+  const isMatch = await bcrypt.compare(password, user.password || '');
 
   if (!isMatch) {
-    console.log("Usuario ou senha invalidos");
-    redirect("/login");
+    console.log('Usuario ou senha invalidos');
+    redirect('/login');
   }
 
   // IF USER AND PASS IS INVALID
-  // TODO: Create Section with JWT
-  redirect("/dashboard");
+  AuthService.createSessionToken({
+    sub: user.id,
+    name: user.fullName,
+    isPremium: user.isPremium,
+  });
+
+  revalidatePath('/dashboard');
+  redirect('/dashboard');
 }
 
 const authActions = {
